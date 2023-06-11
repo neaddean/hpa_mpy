@@ -4,19 +4,16 @@
 # import webrepl
 # webrepl.start()
 
+
 def do_connect():
     import network
     from esp32 import NVS
+    from util.nvs import nvs_get_str
 
     nvs = NVS("_network")
-    buf = bytearray(256)
 
-    def nvs_get_str(key):
-        sz = nvs.get_blob(key, buf)
-        return buf[:sz].decode()
-
-    ssid = nvs_get_str(b"ssid")
-    key = nvs_get_str(b"wifi_key")
+    ssid = nvs_get_str(nvs, "ssid")
+    key = nvs_get_str(nvs, "wifi_key")
     wlan = network.WLAN(network.STA_IF)
     wlan.active(True)
     if not wlan.isconnected():

@@ -1,0 +1,17 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="flash mpy ota" type="ShConfigurationType">
+    <option name="SCRIPT_TEXT" value="esptool --baud 460800 --port COM5 --chip esp32 --before default_reset --after hard_reset write_flash -z --flash_mode dio --flash_size detect --flash_freq 40m 0x1000 C:\Users\Dean\aero\micropython\ports\esp32\build-GENERIC_OTA\bootloader\bootloader.bin 0x8000 C:\Users\Dean\aero\micropython\ports\esp32\build-GENERIC_OTA\partition_table\partition-table.bin 0xd000 C:\Users\Dean\aero\micropython\ports\esp32\build-GENERIC_OTA\ota_data_initial.bin 0x10000 C:\Users\Dean\aero\micropython\ports\esp32\build-GENERIC_OTA\micropython.bin" />
+    <option name="INDEPENDENT_SCRIPT_PATH" value="true" />
+    <option name="SCRIPT_PATH" value="" />
+    <option name="SCRIPT_OPTIONS" value="" />
+    <option name="INDEPENDENT_SCRIPT_WORKING_DIRECTORY" value="true" />
+    <option name="SCRIPT_WORKING_DIRECTORY" value="$PROJECT_DIR$" />
+    <option name="INDEPENDENT_INTERPRETER_PATH" value="true" />
+    <option name="INTERPRETER_PATH" value="" />
+    <option name="INTERPRETER_OPTIONS" value="" />
+    <option name="EXECUTE_IN_TERMINAL" value="true" />
+    <option name="EXECUTE_SCRIPT_FILE" value="false" />
+    <envs />
+    <method v="2" />
+  </configuration>
+</component>

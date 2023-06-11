@@ -5,6 +5,7 @@ import math
 import time
 
 import uasyncio
+from esp32 import NVS
 from machine import I2C, Pin, SPI, unique_id, ADC
 from umqtt.simple import MQTTClient
 
@@ -13,6 +14,7 @@ from display import Display
 from led import run_neopixel_hsl
 from sht31 import SHT31
 from util import timeit
+from util.nvs import nvs_get_str
 
 
 class App:
@@ -31,24 +33,35 @@ class App:
 
         self.sht31.read(True)
 
-        self.mqtt_client = MQTTClient(self.UID,
-                                      "mqtt.thingsboard.cloud",
-                                      user="h2sd5e2ppoz03j801azy",
-                                      password='')
-        self.mqtt_client.connect()
-        self.mqtt_client.set_callback(self.mqtt_sub_cb)
-        self.mqtt_client.subscribe("v1/devices/me/rpc/request/+")
-
         spi2 = SPI(2, baudrate=30_000_000, polarity=1, sck=Pin(18), mosi=Pin(23))
 
         self.display = Display(spi2)
         self.display.init()
 
-        self.keyboard_adc = ADC(Pin(36, Pin.IN), atten=ADC.ATTN_11DB)
+        # self.keyboard_adc = ADC(Pin(36, Pin.IN), atten=ADC.ATTN_11DB)
         # self.sound_adc = self.keyboard_adc
         self.sound_adc = ADC(Pin(39, Pin.IN), atten=ADC.ATTN_0DB)
 
-    def mqtt_sub_cb(self, topic, msg):
+        self.mqtt_client = self._create_mqtt_client()
+
+    def _create_mqtt_client(self):
+        nvs = NVS("_config")
+
+        mqtt_broker = nvs_get_str(nvs, "mqtt_broker")
+        access_token = nvs_get_str(nvs, "access_token")
+
+        mqtt_client = MQTTClient(self.UID,
+                                 mqtt_broker,
+                                 user=access_token,
+                                 password='')
+
+        mqtt_client.connect()
+        mqtt_client.set_callback(self._mqtt_sub_cb)
+        mqtt_client.subscribe("v1/devices/me/rpc/request/+")
+
+        return mqtt_client
+
+    def _mqtt_sub_cb(self, topic, msg):
         topic = topic.decode()
         self.last_received_rpc_id = topic.split("/")[-1]
         msg = json.loads(msg)
@@ -96,7 +109,7 @@ class App:
                 #     print(vals)
 
                 if time.time() - now > 0.5:
-                    self.display.text(f"mic : {sound:5f} mV", 60)
+                    self.display.text(f"mic : {sound:5.0f} mV", 60)
                     self.display.text(f"mic : {10 * math.log10(sound):5.2f} dB", 70)
                     now = time.time()
 

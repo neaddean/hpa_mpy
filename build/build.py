@@ -16,7 +16,7 @@ group.add_argument('--connect', action="store_true")
 group.add_argument('--copy-all-main', action="store_true")
 group.add_argument('--copy-current-main', action="store_true")
 group.add_argument('--build-all', action="store_true")
-group.add_argument('--wifi-config', action="store_true")
+group.add_argument('--nvs-config', action="store_true")
 group.add_argument('--reset', action="store_true")
 
 args = parser.parse_args()
@@ -27,7 +27,7 @@ fn_main = os.path.join(args.proj_dir, 'src/main.py')
 
 
 def run(cmd='', *pos, **kwargs):
-    if args.current_file in cmd and not args.wifi_config:
+    if args.current_file in cmd and not args.nvs_config:
         p = os.path.dirname(args.current_file)
         if not p.startswith(src_dir):
             raise RuntimeError("Can only flash files from `src/`!")
@@ -98,5 +98,5 @@ elif args.build_all:
     cmd = mkdirs_and_cp_cmd()
     run(f"{cmd} run {fn_main} + repl")
 
-elif args.wifi_config:
-    run(f"run {os.path.join(build_dir, 'wifi_config.py')}")
+elif args.nvs_config:
+    run(f"run {os.path.join(build_dir, 'nvs_config.py')}")
