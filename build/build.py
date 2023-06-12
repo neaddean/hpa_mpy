@@ -33,7 +33,7 @@ def run(cmd='', *pos, **kwargs):
     if args.current_file in cmd and not (args.nvs_config or args.rm_all):
         p = os.path.dirname(args.current_file)
         if not p.startswith(src_dir):
-            raise RuntimeError("Can only flash files from `src/`!")
+            raise RuntimeError("Can only run/flash files from `src/`!")
 
     connect_str = r"..\venv\Scripts\python.exe -m mpremote connect COM5 "
     cmd = connect_str + cmd
@@ -55,7 +55,7 @@ def cp_current_file_cmd():
     cmd = ''
     remote = args.current_file.replace(src_dir, '')
     remote = os.path.dirname(remote)
-    cmd += f"cp {args.current_file} :{remote}/ + "
+    cmd += f"cp {args.current_file} :{remote}/ "
     return cmd
 
 
@@ -63,6 +63,7 @@ all_files = {}
 for path, _, files in os.walk(src_dir):
     all_files[os.path.normpath(os.path.relpath(path, src_dir))] = [os.path.normpath(os.path.join(path, f)) for
                                                                    f in files]
+
 if args.connect:
     run()
 
@@ -88,7 +89,7 @@ elif args.copy_current_main:
 
 elif args.copy_all_main:
     cmd = mkdirs_and_cp_cmd()
-    run(f"{cmd} run {fn_main} + repl")
+    run(f"{cmd} + run {fn_main} + repl")
 
 elif args.build_all:
     ls_raw = run("fs ls", capture_output=True).stdout.decode()
@@ -108,7 +109,7 @@ elif args.build_all:
     run(f"{cmd} run {fn_main} + repl")
 
 elif args.nvs_config:
-    run(f"run {os.path.join(build_dir, 'nvs_config.py')}")
+    run(f"run {os.path.join(proj_dir, '../ext/nvs_config.py')}")
 
 elif args.rm_all:
     run(f"run {os.path.join(build_dir, 'rm_all.py')}")

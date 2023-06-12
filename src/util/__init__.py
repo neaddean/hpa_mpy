@@ -1,6 +1,8 @@
 # noinspection PyUnresolvedReferences
 import gc
 
+from micropython import mem_info as _mem_info
+
 verbose = False
 
 
@@ -10,11 +12,12 @@ def db_print(*args, **kwargs):
 
 
 def gc_collect(v=True):
+    from util.timeit import timeit
+
     if v:
-        print(f"free memory before: {gc.mem_free()}")
-        ret = gc.collect()
-        print(ret)
-        print(f"free memory after : {gc.mem_free()}")
-        return ret
+        _mem_info()
+        with timeit("Running garbage collection...", no_header=True):
+            gc.collect()
+        _mem_info()
     else:
-        return gc.collect()
+        gc.collect()

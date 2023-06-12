@@ -1,10 +1,3 @@
-# This file is executed on every boot (including wake-boot from deepsleep)
-# import esp
-# esp.osdebug(None)
-# import webrepl
-# webrepl.start()
-
-
 def do_connect():
     import network
     from esp32 import NVS
@@ -24,4 +17,5 @@ def do_connect():
     print('network config:', wlan.ifconfig())
 
 
+# import machine; machine.freq(240_000_000)
 do_connect()

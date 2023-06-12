@@ -2,10 +2,11 @@ import time
 
 
 class timeit(object):
-    def __init__(self, desc="", unit="ms", suppress=False):
+    def __init__(self, desc="", unit="ms", suppress=False, no_header=False):
         self.unit = unit
         self.suppress = suppress
         self.desc = desc
+        self.no_header = no_header
 
     def __enter__(self):
         self.start = time.time_ns()
@@ -17,7 +18,10 @@ class timeit(object):
             return
 
         if self.desc:
-            print(f"(TIMEIT) {self.desc}: ", end='')
+            if self.no_header:
+                print(f"{self.desc} ", end='')
+            else:
+                print(f"(TIMEIT) {self.desc}: ", end='')
 
         if self.unit == "s":
             print(f"{(end - self.start) / 1e9 : 7.3f} s")

@@ -3,7 +3,7 @@ from util.crc import crc8
 
 class SHT31:
     def __init__(self, i2c, addr=0x44):
-        self.addr = 0x44
+        self.addr = addr
         self.i2c = i2c
 
     def read(self, v=False, f=False):
@@ -11,16 +11,9 @@ class SHT31:
         Nonblocking read
         :return: temperature_c, humidity_perc
         """
-        try:
-            assert self.i2c.writeto(self.addr, b'\x2C\x06') == 2
-        except Exception as e:
-            print()
+        assert self.i2c.writeto(self.addr, b'\x2C\x06') == 2
 
-        # with timeit(desc="sht31 read"):
-        try:
-            resp_raw = self.i2c.readfrom(self.addr, 6)
-        except Exception as e:
-            print(f"Error encountered during read! `{e}`")
+        resp_raw = self.i2c.readfrom(self.addr, 6)
 
         temperature = int.from_bytes(resp_raw[0:2], 'big')
         assert crc8(temperature) == resp_raw[2]
@@ -48,10 +41,7 @@ class SHT31:
 
     def get_status(self):
         assert self.i2c.writeto(self.addr, b'\xF3\x2D') == 2
-        try:
-            resp_raw = self.i2c.readfrom(self.addr, 3)
-        except Exception as e:
-            print(f"Error encountered during read! `{e}`")
+        resp_raw = self.i2c.readfrom(self.addr, 3)
 
         status = int.from_bytes(resp_raw[0:2], 'big')
 

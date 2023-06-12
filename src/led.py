@@ -36,7 +36,7 @@ def run_neopixel_rgb():
         time.sleep_ms(80)
 
 
-async def run_neopixel_hsl(k_h, k_s, l):
+async def run_neopixel_hsl(k_h, k_s, k_l):
     p = Pin(5, Pin.OUT)
     n = neopixel.NeoPixel(p, 1)
 
@@ -50,13 +50,13 @@ async def run_neopixel_hsl(k_h, k_s, l):
         h = 0.5 + math.sin(p_h * math.pi / 180) / 2
         s = 0.2 + p_s
 
-        s = k_s
+        # s = k_s
 
         assert 0 <= h <= 1.0
-        assert 0 <= l <= 1.0
+        assert 0 <= k_l <= 1.0
         assert 0 <= s <= 1.0
 
-        rgb = tuple(map(lambda x: int(127 * x), hls_to_rgb(h, l, s)))
+        rgb = tuple(map(lambda x: int(127 * x), hls_to_rgb(h, k_l, s)))
 
         n.fill(rgb)
         n.write()

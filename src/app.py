@@ -20,7 +20,7 @@ from util.timeit import timeit
 
 class App:
     def __init__(self):
-        print("making app")
+        print("initing app...")
         self.UID = binascii.hexlify(unique_id())
         self.last_received_rpc_id = None
         self._rsp_queue = RingbufQueue([0 for _ in range(10)])
@@ -41,14 +41,19 @@ class App:
         self.display = Display(spi2)
         self.display.init()
 
-        # self.keyboard_adc = ADC(Pin(36, Pin.IN), atten=ADC.ATTN_11DB)
-        # self.sound_adc = self.keyboard_adc
+        self.keyboard_adc = ADC(Pin(36, Pin.IN), atten=ADC.ATTN_11DB)
         self.sound_adc = ADC(Pin(39, Pin.IN), atten=ADC.ATTN_0DB)
 
         self.mqtt_client = self._create_mqtt_client()
         uasyncio.create_task(self._mqtt_dispatch())
 
         self.mqtt_client.publish("v1/devices/me/attributes/request/0", "{'sharedKeys': 'app'}")
+
+        self._init_flag = False
+
+    def wait_for_ready(self):
+        while not self._init_flag:
+            time.sleep_ms(100)
 
     def _create_mqtt_client(self):
         nvs = NVS("_config")
@@ -87,13 +92,13 @@ class App:
             self._rsp_queue.put_nowait((topic, msg))
 
     async def _sht31_telem(self):
-        now = time.time()
+        now = time.ticks_ms()
         while True:
             temperature, humidity = self.sht31.read(v=util.verbose)
 
             d = {"temperature": temperature, "humidity": humidity}
 
-            if time.time() - now > 30:
+            if time.ticks_diff(time.ticks_ms(), now) > 30:
                 self.mqtt_client.publish("v1/devices/me/telemetry", json.dumps(d))
                 now = time.time()
 
@@ -104,21 +109,21 @@ class App:
             await uasyncio.sleep(1)
 
     async def _sound_telem(self):
-        wlen = 5
-        vals = [0] * wlen
-        now = time.time()
+        window_len = 5
+        vals = [0] * window_len
+        now = time.ticks_ms()
         while True:
             with timeit(suppress=True):
                 sound = self.get_sound()
-                vals[wlen - 1] = sound
+                vals[window_len - 1] = sound
 
-                for i in range(wlen):
-                    vals[i], vals[wlen - 1] = vals[wlen - 1], vals[i]
+                for i in range(window_len):
+                    vals[i], vals[window_len - 1] = vals[window_len - 1], vals[i]
 
                 # if time.time() - now > 0.5:
                 #     print(vals)
 
-                if time.time() - now > 0.5:
+                if time.ticks_diff(time.ticks_ms(), now) > 0.5:
                     self.display.text(f"mic : {sound:5.0f} mV", 60)
                     self.display.text(f"mic : {10 * math.log10(sound):5.2f} dB", 70)
                     now = time.time()
@@ -138,18 +143,18 @@ class App:
 
     async def _read_keyboard(self):
         while True:
-            # print(self.get_keyboard())
-            # print(self.get_sound())
+            print(self.get_keyboard())
+            print(self.get_sound())
             await uasyncio.sleep_ms(400)
 
     def display_off(self):
         self.display.display.off()
 
     def display_on(self):
-        print("DADASD")
         self.display.display.on()
 
     async def wait_for_mqtt_response(self, sleep=0):
+        t, rsp = None, None
         await uasyncio.sleep(sleep)
         async for t, rsp in self._rsp_queue:
             break
@@ -169,10 +174,11 @@ class App:
         # self.button.double_func(self.display_off)
         # self.button.long_func(self.display_on)
 
-        d = uasyncio.run(self.wait_for_mqtt_response(3))
-        print("rsp: " + str(d))
+        app_type, _ = await uasyncio.wait_for(self.wait_for_mqtt_response(3), 5)
+        print(f"App type: {app_type['shared']['app']}")
 
         print("Beginning App.main()")
+        self._init_flag = True
 
         while True:
             await uasyncio.sleep_ms(100)
