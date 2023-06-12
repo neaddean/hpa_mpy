@@ -1,3 +1,5 @@
+# High pressure aeroponics system 
 
-flash command:
-esptool --baud 460800 --port COM5 --chip esp32 --before default_reset --after hard_reset write_flash -z --flash_mode dio --flash_size detect --flash_freq 40m 0x1000 C:\Users\Dean\aero\micropython\ports\esp32\build-GENERIC_OTA\bootloader\bootloader.bin 0x8000 C:\Users\Dean\aero\micropython\ports\esp32\build-GENERIC_OTA\partition_table\partition-table.bin 0xd000 C:\Users\Dean\aero\micropython\ports\esp32\build-GENERIC_OTA\ota_data_initial.bin 0x10000 C:\Users\Dean\aero\micropython\ports\esp32\build-GENERIC_OTA\micropython.bin
+# References
+* https://aeroponicsdiy.com/make-your-own-high-pressure-aeroponics-system/
+* https://northernhomestead.com/high-pressure-aeroponics-guide/

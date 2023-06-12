@@ -3,6 +3,6 @@ from util import gc_collect
 
 app = App()
 
-app.start()
+app.go()
 
 gc_collect()

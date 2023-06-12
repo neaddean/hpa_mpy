@@ -18,32 +18,36 @@ group.add_argument('--copy-current-main', action="store_true")
 group.add_argument('--build-all', action="store_true")
 group.add_argument('--nvs-config', action="store_true")
 group.add_argument('--reset', action="store_true")
+group.add_argument('--rm-all', action="store_true")
 
 args = parser.parse_args()
 
-src_dir = os.path.join(args.proj_dir, "src")
-build_dir = os.path.join(args.proj_dir, "build")
-fn_main = os.path.join(args.proj_dir, 'src/main.py')
+proj_dir = os.path.normpath(args.proj_dir)
+
+src_dir = os.path.join(proj_dir, "src")
+build_dir = os.path.join(proj_dir, "build")
+fn_main = os.path.join(proj_dir, 'src/main.py')
 
 
 def run(cmd='', *pos, **kwargs):
-    if args.current_file in cmd and not args.nvs_config:
+    if args.current_file in cmd and not (args.nvs_config or args.rm_all):
         p = os.path.dirname(args.current_file)
         if not p.startswith(src_dir):
             raise RuntimeError("Can only flash files from `src/`!")
 
     connect_str = r"..\venv\Scripts\python.exe -m mpremote connect COM5 "
-    return subprocess.run(connect_str + cmd, *pos, shell=True, **kwargs)
+    cmd = connect_str + cmd
+    print("====== " + cmd)
+    return subprocess.run(cmd, *pos, shell=True, **kwargs)
 
 
 def mkdirs_and_cp_cmd():
     cmd = ''
     for rel, files in all_files.items():
         files_in = [f for f in files]
-        remote = os.path.join(":", rel)
-        remote = remote.replace("\\.", "") + "\\"
+        remote = ":" + rel
         run(f"mkdir {remote}")
-        cmd += f"cp {' '.join(files_in)} {remote} + "
+        cmd += f"cp {' '.join(files_in)} {remote}/ + "
     return cmd
 
 
@@ -57,8 +61,8 @@ def cp_current_file_cmd():
 
 all_files = {}
 for path, _, files in os.walk(src_dir):
-    all_files[os.path.relpath(path, src_dir)] = [os.path.join(path, f) for f in files]
-
+    all_files[os.path.normpath(os.path.relpath(path, src_dir))] = [os.path.normpath(os.path.join(path, f)) for
+                                                                   f in files]
 if args.connect:
     run()
 
@@ -87,16 +91,24 @@ elif args.copy_all_main:
     run(f"{cmd} run {fn_main} + repl")
 
 elif args.build_all:
-    local_files_raw = run("fs ls", capture_output=True).stdout.decode()
+    ls_raw = run("fs ls", capture_output=True).stdout.decode()
     local_files = []
-    for f in local_files_raw.split("\n"):
+    local_dirs = []
+    for f in ls_raw.split("\n"):
         if match := re.search(r"\d (.*?\.py)", f):
             local_files.append(match.group(1))
+        elif match := re.search(r"\d (.*?/)", f):
+            if match.group(1) != "lib/":
+                local_dirs.append(match.group(1))
 
-    run(f"rm {' '.join(local_files)}")
+    if local_files + local_dirs:
+        run(f"rm {' '.join(local_files + local_dirs)}")
 
     cmd = mkdirs_and_cp_cmd()
     run(f"{cmd} run {fn_main} + repl")
 
 elif args.nvs_config:
     run(f"run {os.path.join(build_dir, 'nvs_config.py')}")
+
+elif args.rm_all:
+    run(f"run {os.path.join(build_dir, 'rm_all.py')}")

@@ -1,6 +1,5 @@
 # noinspection PyUnresolvedReferences
 import gc
-from .timeit import timeit
 
 verbose = False
 

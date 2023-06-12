@@ -1,4 +1,4 @@
-from util import timeit
+from .timeit import timeit
 
 import micropython
 

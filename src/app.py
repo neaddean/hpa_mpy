@@ -12,15 +12,18 @@ from umqtt.simple import MQTTClient
 import util
 from display import Display
 from led import run_neopixel_hsl
+from primitives import RingbufQueue
 from sht31 import SHT31
-from util import timeit
 from util.nvs import nvs_get_str
+from util.timeit import timeit
 
 
 class App:
     def __init__(self):
+        print("making app")
         self.UID = binascii.hexlify(unique_id())
         self.last_received_rpc_id = None
+        self._rsp_queue = RingbufQueue([0 for _ in range(10)])
 
         # noinspection PyArgumentList
         i2c = I2C(1, scl=Pin(22), sda=Pin(21), freq=400_000, timeout=500_000)
@@ -43,6 +46,9 @@ class App:
         self.sound_adc = ADC(Pin(39, Pin.IN), atten=ADC.ATTN_0DB)
 
         self.mqtt_client = self._create_mqtt_client()
+        uasyncio.create_task(self._mqtt_dispatch())
+
+        self.mqtt_client.publish("v1/devices/me/attributes/request/0", "{'sharedKeys': 'app'}")
 
     def _create_mqtt_client(self):
         nvs = NVS("_config")
@@ -58,6 +64,7 @@ class App:
         mqtt_client.connect()
         mqtt_client.set_callback(self._mqtt_sub_cb)
         mqtt_client.subscribe("v1/devices/me/rpc/request/+")
+        mqtt_client.subscribe("v1/devices/me/attributes/response/+")
 
         return mqtt_client
 
@@ -67,14 +74,17 @@ class App:
         msg = json.loads(msg)
         print((topic, msg))
 
-        if msg["method"] == "setHeater":
-            self.sht31.heater(msg["params"])
-        elif msg["method"] == "getHeater":
-            heater_status = bool(self.sht31.get_status()["heater"])
-            self.mqtt_client.publish(f"v1/devices/me/rpc/response/{self.last_received_rpc_id}",
-                                     json.dumps(heater_status))
+        if "method" in msg:
+            if msg["method"] == "setHeater":
+                self.sht31.heater(msg["params"])
+            elif msg["method"] == "getHeater":
+                heater_status = bool(self.sht31.get_status()["heater"])
+                self.mqtt_client.publish(f"v1/devices/me/rpc/response/{self.last_received_rpc_id}",
+                                         json.dumps(heater_status))
+            else:
+                print("ERROR: Unhandled RPC!")
         else:
-            print("ERROR: Unhandled RPC!")
+            self._rsp_queue.put_nowait((topic, msg))
 
     async def _sht31_telem(self):
         now = time.time()
@@ -139,12 +149,19 @@ class App:
         print("DADASD")
         self.display.display.on()
 
+    async def wait_for_mqtt_response(self, sleep=0):
+        await uasyncio.sleep(sleep)
+        async for t, rsp in self._rsp_queue:
+            break
+        return rsp, t.split("/")[-1]
+
     # noinspection PyAsyncCall
     async def _main(self):
         uasyncio.create_task(run_neopixel_hsl(6, 0.5, 0.25))
         uasyncio.create_task(self._sht31_telem())
         uasyncio.create_task(self._sound_telem())
         uasyncio.create_task(self._mqtt_dispatch())
+
         # uasyncio.create_task(self.read_keyboard())
 
         # self.display_off()
@@ -152,9 +169,13 @@ class App:
         # self.button.double_func(self.display_off)
         # self.button.long_func(self.display_on)
 
+        d = uasyncio.run(self.wait_for_mqtt_response(3))
+        print("rsp: " + str(d))
+
+        print("Beginning App.main()")
+
         while True:
             await uasyncio.sleep_ms(100)
 
     def go(self):
         _thread.start_new_thread(uasyncio.run, (self._main(),))
-        # uasyncio.run(self._main())

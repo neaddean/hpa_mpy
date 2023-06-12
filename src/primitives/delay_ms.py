@@ -7,7 +7,7 @@
 
 import uasyncio as asyncio
 from utime import ticks_add, ticks_diff, ticks_ms
-from . import launch
+from build.primitives import launch
 
 class Delay_ms:
 
