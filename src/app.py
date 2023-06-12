@@ -76,7 +76,7 @@ class App:
         else:
             print("ERROR: Unhandled RPC!")
 
-    async def sht31_telem(self):
+    async def _sht31_telem(self):
         now = time.time()
         while True:
             temperature, humidity = self.sht31.read(v=util.verbose)
@@ -93,7 +93,7 @@ class App:
 
             await uasyncio.sleep(1)
 
-    async def sound_telem(self):
+    async def _sound_telem(self):
         wlen = 5
         vals = [0] * wlen
         now = time.time()
@@ -115,7 +115,7 @@ class App:
 
             await uasyncio.sleep_ms(100)
 
-    async def mqtt_dispatch(self):
+    async def _mqtt_dispatch(self):
         while True:
             self.mqtt_client.check_msg()
             await uasyncio.sleep_ms(50)
@@ -126,7 +126,7 @@ class App:
     def get_sound(self):
         return self.sound_adc.read_uv() // 1000
 
-    async def read_keyboard(self):
+    async def _read_keyboard(self):
         while True:
             # print(self.get_keyboard())
             # print(self.get_sound())
@@ -142,9 +142,9 @@ class App:
     # noinspection PyAsyncCall
     async def _main(self):
         uasyncio.create_task(run_neopixel_hsl(6, 0.5, 0.25))
-        uasyncio.create_task(self.sht31_telem())
-        uasyncio.create_task(self.sound_telem())
-        uasyncio.create_task(self.mqtt_dispatch())
+        uasyncio.create_task(self._sht31_telem())
+        uasyncio.create_task(self._sound_telem())
+        uasyncio.create_task(self._mqtt_dispatch())
         # uasyncio.create_task(self.read_keyboard())
 
         # self.display_off()
@@ -155,6 +155,6 @@ class App:
         while True:
             await uasyncio.sleep_ms(100)
 
-    def start(self):
+    def go(self):
         _thread.start_new_thread(uasyncio.run, (self._main(),))
         # uasyncio.run(self._main())
