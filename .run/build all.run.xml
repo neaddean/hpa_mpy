@@ -20,7 +20,6 @@
     <option name="REDIRECT_INPUT" value="false" />
     <option name="INPUT_FILE" value="" />
     <method v="2">
-      <option name="RunConfigurationTask" enabled="true" run_configuration_name="reset" run_configuration_type="PythonConfigurationType" />
       <option name="RunConfigurationTask" enabled="true" run_configuration_name="rm all" run_configuration_type="PythonConfigurationType" />
       <option name="RunConfigurationTask" enabled="true" run_configuration_name="nvs_config" run_configuration_type="PythonConfigurationType" />
     </method>

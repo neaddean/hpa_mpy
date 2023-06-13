@@ -7,3 +7,4 @@ app.go()
 app.wait_for_ready()
 
 gc_collect()
+

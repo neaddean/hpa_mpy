@@ -36,7 +36,7 @@ class App:
 
         self.sht31.read(True)
 
-        spi2 = SPI(2, baudrate=30_000_000, polarity=1, sck=Pin(18), mosi=Pin(23))
+        spi2 = SPI(2, baudrate=30_000_000, polarity=1, sck=Pin(18), mosi=Pin(23), miso=Pin(19, Pin.IN))
 
         self.display = Display(spi2)
         self.display.init()
@@ -98,15 +98,14 @@ class App:
 
             d = {"temperature": temperature, "humidity": humidity}
 
-            if time.ticks_diff(time.ticks_ms(), now) > 30:
+            if time.ticks_diff(time.ticks_ms(), now) > 10_000:
                 self.mqtt_client.publish("v1/devices/me/telemetry", json.dumps(d))
                 now = time.time()
 
-            # display.display.fill(st7789.RED)
             self.display.text(f"temp: {temperature:0.1f} C", 40)
             self.display.text(f"hum : {humidity:0.1f} %", 50)
 
-            await uasyncio.sleep(1)
+            await uasyncio.sleep_ms(500)
 
     async def _sound_telem(self):
         window_len = 5
@@ -147,12 +146,6 @@ class App:
             print(self.get_sound())
             await uasyncio.sleep_ms(400)
 
-    def display_off(self):
-        self.display.display.off()
-
-    def display_on(self):
-        self.display.display.on()
-
     async def wait_for_mqtt_response(self, sleep=0):
         t, rsp = None, None
         await uasyncio.sleep(sleep)
@@ -162,7 +155,7 @@ class App:
 
     # noinspection PyAsyncCall
     async def _main(self):
-        uasyncio.create_task(run_neopixel_hsl(6, 0.5, 0.25))
+        uasyncio.create_task(run_neopixel_hsl(6, 0.5, 0.13))
         uasyncio.create_task(self._sht31_telem())
         uasyncio.create_task(self._sound_telem())
         uasyncio.create_task(self._mqtt_dispatch())

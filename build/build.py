@@ -74,7 +74,7 @@ elif args.resume:
     run(f"resume")
 
 elif args.reset:
-    run(f"reset + repl")
+    run('exec --no-follow "import time, machine; time.sleep_ms(100); machine.reset()"')
 
 elif args.copy_and_run:
     run(f"cp {args.current_file} : + run {args.current_file} + repl")
@@ -106,7 +106,8 @@ elif args.build_all:
         run(f"rm {' '.join(local_files + local_dirs)}")
 
     cmd = mkdirs_and_cp_cmd()
-    run(f"{cmd} run {fn_main} + repl")
+    run(cmd)
+    run('exec --no-follow "import time, machine; time.sleep_ms(100); machine.reset()" + repl')
 
 elif args.nvs_config:
     run(f"run {os.path.join(proj_dir, '../ext/nvs_config.py')}")
