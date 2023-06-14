@@ -1,3 +1,8 @@
+import machine
+
+
+# import micropython; micropython.alloc_emergency_exception_buf(256)
+
 def do_connect():
     import network
     from esp32 import NVS
@@ -17,5 +22,7 @@ def do_connect():
     print('network config:', wlan.ifconfig())
 
 
-# import machine; machine.freq(240_000_000)
+# display backlight? doesn't work here
+machine.Pin(12, machine.Pin.OUT).off()
+
 do_connect()

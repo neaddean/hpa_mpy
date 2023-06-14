@@ -1,6 +1,6 @@
 import argparse
+import json
 import os
-import re
 import subprocess
 
 parser = argparse.ArgumentParser(description='Process some integers.')
@@ -19,6 +19,7 @@ group.add_argument('--build-all', action="store_true")
 group.add_argument('--nvs-config', action="store_true")
 group.add_argument('--reset', action="store_true")
 group.add_argument('--rm-all', action="store_true")
+group.add_argument('--delta-main', action="store_true")
 
 args = parser.parse_args()
 
@@ -30,7 +31,7 @@ fn_main = os.path.join(proj_dir, 'src/main.py')
 
 
 def run(cmd='', *pos, **kwargs):
-    if args.current_file in cmd and not (args.nvs_config or args.rm_all):
+    if args.current_file in cmd and not any(x in cmd for x in ["nvs_config.py", "rm_all.py"]):
         p = os.path.dirname(args.current_file)
         if not p.startswith(src_dir):
             raise RuntimeError("Can only run/flash files from `src/`!")
@@ -52,7 +53,7 @@ def mkdirs_and_cp_cmd():
 
 
 def cp_current_file_cmd():
-    cmd = ''
+    cmd = 'soft-reset + '
     remote = args.current_file.replace(src_dir, '')
     remote = os.path.dirname(remote)
     cmd += f"cp {args.current_file} :{remote}/ "
@@ -63,6 +64,36 @@ all_files = {}
 for path, _, files in os.walk(src_dir):
     all_files[os.path.normpath(os.path.relpath(path, src_dir))] = [os.path.normpath(os.path.join(path, f)) for
                                                                    f in files]
+
+
+def hash_all_files():
+    files = [file for _path, files in all_files.items() for file in files]
+    hashes = {}
+    for fn in files:
+        hashes[fn] = os.path.getmtime(fn)
+    return hashes
+
+
+def update_files_hash():
+    with open(os.path.join(build_dir, "files_hash.json"), "w") as f:
+        f.write(json.dumps(hash_all_files(), indent=2))
+
+
+def get_changed_files():
+    hashes = hash_all_files()
+    if not os.path.exists(os.path.join(build_dir, "files_hash.json")):
+        return list(hashes.keys())
+    with open(os.path.join(build_dir, "files_hash.json")) as f:
+        old_hashes = json.loads(f.read())
+
+    new_files = set(hashes.items())
+    old_files = set(old_hashes.items())
+
+    cp_files = new_files - old_files
+    rm_files = old_files - new_files
+
+    return set(x for x, y in cp_files), set(x for x, y in rm_files)
+
 
 if args.connect:
     run()
@@ -85,28 +116,32 @@ elif args.copy:
 
 elif args.copy_current_main:
     cmd = cp_current_file_cmd()
-    run(f"{cmd} + run {fn_main} + repl")
+    run(f"{cmd} + soft-reset + run {fn_main} + repl")
 
 elif args.copy_all_main:
     cmd = mkdirs_and_cp_cmd()
     run(f"{cmd} + run {fn_main} + repl")
 
+elif args.delta_main:
+    cp_files, _ = get_changed_files()
+
+    cmd = ''
+    for rel, files in all_files.items():
+        files_in = [f for f in files if f in cp_files and not f.endswith("/")]
+        remote = ":" + rel
+        # run(f"mkdir {remote}")
+        if files_in:
+            cmd += f"cp {' '.join(files_in)} {remote}/ + "
+
+    run(f"{cmd}")
+    update_files_hash()
+    run(f"soft-reset + run {fn_main} + repl")
+
+
 elif args.build_all:
-    ls_raw = run("fs ls", capture_output=True).stdout.decode()
-    local_files = []
-    local_dirs = []
-    for f in ls_raw.split("\n"):
-        if match := re.search(r"\d (.*?\.py)", f):
-            local_files.append(match.group(1))
-        elif match := re.search(r"\d (.*?/)", f):
-            if match.group(1) != "lib/":
-                local_dirs.append(match.group(1))
-
-    if local_files + local_dirs:
-        run(f"rm {' '.join(local_files + local_dirs)}")
-
-    cmd = mkdirs_and_cp_cmd()
-    run(cmd)
+    run(f"run {os.path.join(build_dir, 'rm_all.py')}")
+    run(f"run {os.path.join(proj_dir, '../ext/nvs_config.py')}")
+    run(mkdirs_and_cp_cmd())
     run('exec --no-follow "import time, machine; time.sleep_ms(100); machine.reset()" + repl')
 
 elif args.nvs_config:

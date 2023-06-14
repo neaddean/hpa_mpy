@@ -14,12 +14,17 @@ from display import Display
 from led import run_neopixel_hsl
 from primitives import RingbufQueue
 from sht31 import SHT31
+from util import atimeit
 from util.nvs import nvs_get_str
 from util.timeit import timeit
 
 
-class App:
+class _App:
     def __init__(self):
+        # the watchdog timer is bound to a core
+        # self.wdt = WDT(timeout=5_000)
+        self._feed_wdt()
+
         print("initing app...")
         self.UID = binascii.hexlify(unique_id())
         self.last_received_rpc_id = None
@@ -36,20 +41,36 @@ class App:
 
         self.sht31.read(True)
 
-        spi2 = SPI(2, baudrate=30_000_000, polarity=1, sck=Pin(18), mosi=Pin(23), miso=Pin(19, Pin.IN))
+        self._feed_wdt()
+
+        spi2 = SPI(2, baudrate=40_000_000, polarity=1, sck=Pin(18), mosi=Pin(23), miso=Pin(19, Pin.IN))
 
         self.display = Display(spi2)
         self.display.init()
+
+        self._feed_wdt()
 
         self.keyboard_adc = ADC(Pin(36, Pin.IN), atten=ADC.ATTN_11DB)
         self.sound_adc = ADC(Pin(39, Pin.IN), atten=ADC.ATTN_0DB)
 
         self.mqtt_client = self._create_mqtt_client()
-        uasyncio.create_task(self._mqtt_dispatch())
-
-        self.mqtt_client.publish("v1/devices/me/attributes/request/0", "{'sharedKeys': 'app'}")
 
         self._init_flag = False
+
+        self._feed_wdt()
+
+        self._display_lines = [None for _ in range(160 // 10)]
+
+        # @staticmethod
+
+    async def _wdt_task(self):
+        async for _delta in (atimeit()):
+            self._feed_wdt()
+            # print(delta)
+            await uasyncio.sleep_ms(50)
+
+    def _feed_wdt(self):
+        pass
 
     def wait_for_ready(self):
         while not self._init_flag:
@@ -91,9 +112,9 @@ class App:
         else:
             self._rsp_queue.put_nowait((topic, msg))
 
-    async def _sht31_telem(self):
+    async def _sht31_task(self):
         now = time.ticks_ms()
-        while True:
+        async for _delta in atimeit():
             temperature, humidity = self.sht31.read(v=util.verbose)
 
             d = {"temperature": temperature, "humidity": humidity}
@@ -102,12 +123,12 @@ class App:
                 self.mqtt_client.publish("v1/devices/me/telemetry", json.dumps(d))
                 now = time.time()
 
-            self.display.text(f"temp: {temperature:0.1f} C", 40)
-            self.display.text(f"hum : {humidity:0.1f} %", 50)
+            self._text(f"temp: {temperature:0.1f} C", 4)
+            self._text(f"hum : {humidity:0.1f} %", 6)
 
             await uasyncio.sleep_ms(500)
 
-    async def _sound_telem(self):
+    async def _sound_task(self):
         window_len = 5
         vals = [0] * window_len
         now = time.ticks_ms()
@@ -123,13 +144,13 @@ class App:
                 #     print(vals)
 
                 if time.ticks_diff(time.ticks_ms(), now) > 0.5:
-                    self.display.text(f"mic : {sound:5.0f} mV", 60)
-                    self.display.text(f"mic : {10 * math.log10(sound):5.2f} dB", 70)
+                    self._text(f"mic : {sound:5.0f} mV", 8)
+                    self._text(f"mic : {10 * math.log10(sound):5.2f} dB", 10)
                     now = time.time()
 
             await uasyncio.sleep_ms(100)
 
-    async def _mqtt_dispatch(self):
+    async def _mqtt_task(self):
         while True:
             self.mqtt_client.check_msg()
             await uasyncio.sleep_ms(50)
@@ -153,12 +174,32 @@ class App:
             break
         return rsp, t.split("/")[-1]
 
+    def _text(self, line, row):
+        self._display_lines[row] = line
+
+    async def _refresh_display_task(self):
+        _max_chars = 128 // 8
+        while True:
+            start = time.ticks_ms()
+            for row, line in enumerate(self._display_lines):
+                if not line:
+                    continue
+                self.display.text(line, row * 10)
+            diff = time.ticks_diff(time.ticks_ms(), start)
+            if diff > 50:
+                print(f"\033[0;31mWARNING: Display refresh took {diff} ms!!!\033[0m")
+            await uasyncio.sleep_ms(100)
+
     # noinspection PyAsyncCall
     async def _main(self):
+        self._feed_wdt()
+        uasyncio.create_task(self._wdt_task())
+
         uasyncio.create_task(run_neopixel_hsl(6, 0.5, 0.13))
-        uasyncio.create_task(self._sht31_telem())
-        uasyncio.create_task(self._sound_telem())
-        uasyncio.create_task(self._mqtt_dispatch())
+        uasyncio.create_task(self._sht31_task())
+        uasyncio.create_task(self._sound_task())
+        uasyncio.create_task(self._mqtt_task())
+        uasyncio.create_task(self._refresh_display_task())
 
         # uasyncio.create_task(self.read_keyboard())
 
@@ -167,14 +208,17 @@ class App:
         # self.button.double_func(self.display_off)
         # self.button.long_func(self.display_on)
 
-        app_type, _ = await uasyncio.wait_for(self.wait_for_mqtt_response(3), 5)
-        print(f"App type: {app_type['shared']['app']}")
-
-        print("Beginning App.main()")
         self._init_flag = True
+        print("Beginning App.main()")
 
         while True:
-            await uasyncio.sleep_ms(100)
+            await uasyncio.sleep(3600)
 
     def go(self):
-        _thread.start_new_thread(uasyncio.run, (self._main(),))
+        # give time for print buffer to flush because apps run in a thread
+        time.sleep_ms(100)
+        # _thread.start_new_thread(uasyncio.run, (self._main(),))
+        uasyncio.run(self._main())
+
+
+_thread.start_new_thread(_App().go, ())

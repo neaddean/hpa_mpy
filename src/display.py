@@ -1,6 +1,9 @@
 # import st7789py as st7789
+import time
+
+import romanp as font_v
 import st7789
-import vga1_8x8 as font
+import vga2_8x16 as font
 from machine import Pin, PWM
 
 
@@ -10,29 +13,33 @@ class Display:
         self._dc = Pin(25, Pin.OUT)
         self._spi = spi
 
-        self.columns = 128
-        self.rows = 160
+        pc = 2
+        pr = 2
+        self.columns = 128 + pc
+        self.rows = 160 + pr
+        self._brightness_pwm = PWM(Pin(12), freq=100, duty_u16=0)
+
+        # noinspection PyUnresolvedReferences
         self.display = st7789.ST7789(self._spi,
                                      self.columns,
                                      self.rows,
+                                     # buffer_size=(self.rows + px) * (self.columns + py) * 2,
                                      cs=self._cs,
                                      reset=Pin(26, Pin.OUT),
                                      dc=self._dc,
                                      # backlight=Pin(12, Pin.OUT),
                                      color_order=st7789.RGB)
 
-        self._brightness_pwm = PWM(Pin(12), freq=100, duty_u16=0)
-
     def init(self):
-        self.display.init()
+        self.dim(0.2)
         self.display.inversion_mode(False)
-        self.dim(0.4)
 
+        self.display.init()
+        # self.display.bounding(True)
+        time.sleep_ms(15)
         self.display.fill(st7789.color565(0, 0, 0))
-
-    def write_command(self):
-        # TODO
-        pass
+        time.sleep_ms(15)
+        self.display.fill(st7789.color565(0, 0, 0))
 
     def text(self, text, line):
         self.display.text(
@@ -42,6 +49,16 @@ class Display:
             line,
             st7789.color565(0, 127, 0),
             st7789.color565(0, 0, 0),
+        )
+
+    def textv(self, text, line):
+        self.display.draw(
+            font_v,
+            text,
+            8,
+            line,
+            st7789.color565(0, 127, 0),
+            1,
         )
 
     def center(self, text, line):
