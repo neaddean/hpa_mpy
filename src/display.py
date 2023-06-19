@@ -1,14 +1,20 @@
 # import st7789py as st7789
 import time
 
+import micropython
 import romanp as font_v
 import st7789
 import vga2_8x16 as font
-from machine import Pin, PWM
+from machine import Pin, PWM, SPI
+from micropython import const
 
 
 class Display:
-    def __init__(self, spi):
+    COL_OFFSET = const(8)
+
+    def __init__(self):
+        spi = SPI(2, baudrate=30_000_000, polarity=1, sck=Pin(18), mosi=Pin(23))  # , miso=Pin(19, Pin.IN))
+
         self._cs = Pin(14, Pin.OUT)
         self._dc = Pin(25, Pin.OUT)
         self._spi = spi
@@ -23,12 +29,13 @@ class Display:
         self.display = st7789.ST7789(self._spi,
                                      self.columns,
                                      self.rows,
-                                     # buffer_size=(self.rows + px) * (self.columns + py) * 2,
                                      cs=self._cs,
                                      reset=Pin(26, Pin.OUT),
                                      dc=self._dc,
                                      # backlight=Pin(12, Pin.OUT),
                                      color_order=st7789.RGB)
+
+        # self.display.offset(2, 2)
 
     def init(self):
         self.dim(0.2)
@@ -41,20 +48,21 @@ class Display:
         time.sleep_ms(15)
         self.display.fill(st7789.color565(0, 0, 0))
 
-    def text(self, text, line):
+    @micropython.native
+    def text(self, text, line, col=0):
         self.display.text(
             font,
             text,
-            8,
+            self.COL_OFFSET + col,
             line,
             st7789.color565(0, 127, 0),
             st7789.color565(0, 0, 0),
         )
 
-    def textv(self, text, line):
+    def textv(self, text, line, col=0):
         self.display.draw(
             font_v,
-            text,
+            self.COL_OFFSET + col,
             8,
             line,
             st7789.color565(0, 127, 0),

@@ -1,10 +1,16 @@
 # noinspection PyUnresolvedReferences
 import gc
+import math
 import time
 
 from micropython import mem_info as _mem_info
 
 verbose = False
+
+
+# noinspection PyPep8Naming
+def dB(x):
+    return 10 * math.log10(x)
 
 
 def db_print(*args, **kwargs):
