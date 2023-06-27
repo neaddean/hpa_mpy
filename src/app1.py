@@ -14,7 +14,7 @@ from display import Display
 from led import run_neopixel_hsl
 from primitives import RingbufQueue
 from sht31 import SHT31
-from util import atimeit
+from util import atimeit, Once
 from util.nvs import nvs_get_str
 from util.statistics import mean
 from util.timeit import timeit
@@ -24,8 +24,9 @@ class App:
     def __init__(self):
         self.is_init = False
 
-        print("initing app...")
         self.UID = binascii.hexlify(unique_id())
+        print(f"initing app for UID {self.UID} ...")
+
         self.last_received_rpc_id = None
         self._rsp_queue = RingbufQueue([0 for _ in range(10)])
 
@@ -47,18 +48,18 @@ class App:
 
         print("adc init")
         self.keyboard_adc = ADC(Pin(36, Pin.IN), atten=ADC.ATTN_11DB)
-        self.sound_adc = ADC(Pin(39, Pin.IN), atten=ADC.ATTN_0DB)
-
-        print("mqtt init")
-        self.mqtt_client = self._create_mqtt_client()
+        self.sound_adc = ADC(Pin(39, Pin.IN), atten=ADC.ATTN_2_5DB)
 
         self._init_flag = False
 
         self._display_lines = ['' for _ in range(160 // 10)]
 
+        self._sht31_telem = Once.Taken()
+
         print("init complete")
 
-    async def _wdt_task(self):
+    @staticmethod
+    async def _wdt_task():
         wdt = WDT(timeout=60_000)
         wdt.feed()
         async for _delta in (atimeit()):
@@ -81,7 +82,7 @@ class App:
                                  user=access_token,
                                  password='')
 
-        mqtt_client.connect(clean_session=False)
+        mqtt_client.connect(clean_session=True)
         mqtt_client.set_callback(self._mqtt_sub_cb)
         mqtt_client.subscribe("v1/devices/me/rpc/request/+")
         mqtt_client.subscribe("v1/devices/me/attributes/response/+")
@@ -107,24 +108,23 @@ class App:
             self._rsp_queue.put_nowait((topic, msg))
 
     async def _sht31_task(self):
-        now = time.ticks_ms()
-        async for _delta in atimeit():
-            try:
-                temperature, humidity = self.sht31.read(v=util.verbose)
+        while True:
+            now = time.ticks_ms()
+            async for _delta in atimeit():
+                try:
+                    temperature, humidity = self.sht31.read(v=util.verbose)
 
-                self._text(f"temp: %.1f C" % temperature, 0)
-                self._text(f"hum : %.1f %%" % humidity, 2)
+                    self._text(f"temp: %.1f C" % temperature, 0)
+                    self._text(f"hum : %.1f %%" % humidity, 2)
 
-                if time.ticks_diff(time.ticks_ms(), now) > 20_000:
-                    self.mqtt_client.publish("v1/devices/me/telemetry",
-                                             json.dumps({"temperature": temperature, "humidity": humidity}))
-                    now = time.time()
+                    if time.ticks_diff(time.ticks_ms(), now) > 20_000:
+                        self._sht31_telem = Once({"temperature": temperature, "humidity": humidity})
+                        now = time.time()
 
-            except Exception as e:
-                # print(e)
-                raise e
-                pass
-            await uasyncio.sleep_ms(100)
+                except Exception as e:
+                    print(e)
+                    break
+                await uasyncio.sleep_ms(100)
 
     @micropython.native
     async def _sound_task(self):
@@ -148,20 +148,29 @@ class App:
                     self._text(f"mic : %5.0f mV" % sound, 4)
                     self._text(f"u   : %5.0f mV" % u_sound, 6)
                     if u_sound > 0.0:
-                        self._text(f"mic : %5.2f dB" % util.dB(sound / 75), 8)
-                        self._text(f"u   : %5.2f dB" % util.dB(u_sound / 75), 10)
+                        self._text(f"mic : %5.2f dB" % util.dB(sound / 78), 8)
+                        self._text(f"u   : %5.2f dB" % util.dB(u_sound / 78), 10)
                     old_time = time.ticks_ms()
 
-            await uasyncio.sleep_ms(100 // window_len)
+            await uasyncio.sleep_ms(250 // window_len)
 
     async def _mqtt_task(self):
         while True:
             try:
-                self.mqtt_client.check_msg()
+                self.mqtt_client = self._create_mqtt_client()
+
+                while True:
+                    now = time.ticks_ms()
+                    self.mqtt_client.check_msg()
+
+                    if self._sht31_telem.ready:
+                        self.mqtt_client.publish("v1/devices/me/telemetry",
+                                                 json.dumps(self._sht31_telem.take()))
+
+                    await uasyncio.sleep_ms(50)
             except Exception as e:
                 print(e)
                 pass
-            await uasyncio.sleep_ms(50)
 
     def get_keyboard(self):
         return self.keyboard_adc.read_u16()
@@ -188,6 +197,8 @@ class App:
         _max_chars = 128 // 8
         display_lines = self._display_lines
         current_lines = ['' for _ in range(160 // 10)]
+        n_warns = 0
+        n_warns_suppress = 1
         while True:
             start = time.ticks_ms()
             try:
@@ -206,11 +217,14 @@ class App:
                     current_lines[row] = line
 
             except Exception as e:
-                print(e)
+                # print(e)
                 raise e
             diff = time.ticks_diff(time.ticks_ms(), start)
-            if diff > 35:
+            if diff > 35 and n_warns >= n_warns_suppress:
                 print(f"\033[0;31mWARNING: Display refresh took {diff} ms!!!\033[0m")
+            else:
+                n_warns_suppress += 1
+
             await uasyncio.sleep_ms(100)
 
     # noinspection PyAsyncCall
@@ -255,6 +269,7 @@ class App:
 
 
 def _handle_exception(_loop, context):
+    # https://github.com/micropython/micropython/pull/5796
     # context["message"] will always be there; but context["exception"] may not
     print(context)
     print(context["message"])

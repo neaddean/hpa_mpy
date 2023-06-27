@@ -8,6 +8,27 @@ from micropython import mem_info as _mem_info
 verbose = False
 
 
+class Once:
+    def __init__(self, obj):
+        self._obj = obj
+        self._ready = True
+
+    @property
+    def ready(self):
+        return self._ready
+
+    def take(self):
+        self._ready = False
+        return self._obj
+
+    # noinspection PyPep8Naming
+    @classmethod
+    def Taken(cls):
+        taken = cls(None)
+        taken._ready = False
+        return taken
+
+
 # noinspection PyPep8Naming
 def dB(x):
     return 10 * math.log10(x)

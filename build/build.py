@@ -1,10 +1,15 @@
 # noinspection PyUnresolvedReferences
 
 import argparse
-import json
+import json5 as json
 import os
 import subprocess
 import time
+
+with open("settings.json") as f:
+    settings = json.loads(f.read())
+
+COM_PORT = settings["COM_PORT"]
 
 parser = argparse.ArgumentParser(description='Process some integers.')
 parser.add_argument('--current-file', type=str, required=True)
@@ -40,7 +45,7 @@ def run(cmd='', *pos, **kwargs):
         if not p.startswith(src_dir):
             raise RuntimeError("Can only run/flash files from `src/`!")
 
-    connect_str = r"..\venv\Scripts\python.exe -m mpremote connect COM5 "
+    connect_str = rf"..\venv\Scripts\python.exe -m mpremote connect {COM_PORT} "
     cmd = connect_str + cmd
     print("====== " + cmd)
     time.sleep(0.01)
@@ -156,7 +161,7 @@ elif args.delta_main:
 elif args.build_all:
     # run(f"run {os.path.join(build_dir, 'rm_all.py')}")
 
-    erase_vfs = "esptool --baud 921600 --port COM5 --chip esp32 --before default_reset " \
+    erase_vfs = f"esptool --baud 921600 --port {COM_PORT} --chip esp32 --before default_reset " \
                 "--after hard_reset erase_region 0x310000 0x0f0000"
     subprocess.run(erase_vfs, shell=True)
 
@@ -164,6 +169,10 @@ elif args.build_all:
         os.remove(fn_hash)
     except OSError:
         pass
+
+    # moved into build
+    # flash_packages = f"mpremote connect {COM_PORT} mip install umqtt.simple neopixel"
+    # subprocess.run(flash_packages, shell=True)
 
     run(f"run {os.path.join(proj_dir, '../ext/nvs_config.py')}")
     run(mkdirs_and_cp_cmd())

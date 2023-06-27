@@ -38,7 +38,7 @@ class Display:
         # self.display.offset(2, 2)
 
     def init(self):
-        self.dim(0.2)
+        self.dim(0.04)
         self.display.inversion_mode(False)
 
         self.display.init()
@@ -59,15 +59,15 @@ class Display:
             st7789.color565(0, 0, 0),
         )
 
-    def textv(self, text, line, col=0):
-        self.display.draw(
-            font_v,
-            self.COL_OFFSET + col,
-            8,
-            line,
-            st7789.color565(0, 127, 0),
-            1,
-        )
+    # def textv(self, text, line, col=0):
+    #     self.display.draw(
+    #         font_v,
+    #         self.COL_OFFSET + col,
+    #         8,
+    #         line,
+    #         st7789.color565(0, 127, 0),
+    #         1,
+    #     )
 
     def center(self, text, line):
         col = (self.columns >> 1) - (len(text) * font.WIDTH >> 1)
@@ -102,4 +102,5 @@ class Display:
                 self._cs.on()
 
     def dim(self, setting):
+        assert 0 <= setting <= 1.0
         self._brightness_pwm.duty_u16(int(setting * 0xFFFF))
