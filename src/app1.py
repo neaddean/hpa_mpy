@@ -39,7 +39,7 @@ class App:
 
         assert self.sht31.addr in i2c.scan()
 
-        self.sht31.read(True)
+        self.sht31.read(v=True)
 
         print("create display")
         self.display = Display()
@@ -83,29 +83,35 @@ class App:
                                  password='')
 
         mqtt_client.connect(clean_session=True)
-        mqtt_client.set_callback(self._mqtt_sub_cb)
+        mqtt_client.set_callback(self._mqtt_sub_cb(self.callback_handler))
         mqtt_client.subscribe("v1/devices/me/rpc/request/+")
         mqtt_client.subscribe("v1/devices/me/attributes/response/+")
 
         return mqtt_client
 
-    def _mqtt_sub_cb(self, topic, msg):
-        topic = topic.decode()
-        self.last_received_rpc_id = topic.split("/")[-1]
-        msg = json.loads(msg)
-        print((topic, msg))
-
-        if "method" in msg:
-            if msg["method"] == "setHeater":
-                self.sht31.heater(msg["params"])
-            elif msg["method"] == "getHeater":
-                heater_status = bool(self.sht31.get_status()["heater"])
-                self.mqtt_client.publish(f"v1/devices/me/rpc/response/{self.last_received_rpc_id}",
-                                         json.dumps(heater_status))
-            else:
-                print("ERROR: Unhandled RPC!")
+    def callback_handler(self, msg, id):
+        if msg["method"] == "setHeater":
+            self.sht31.heater(msg["params"])
+        elif msg["method"] == "getHeater":
+            heater_status = bool(self.sht31.get_status()["heater"])
+            self.mqtt_client.publish(f"v1/devices/me/rpc/response/{id}",
+                                     json.dumps(heater_status))
         else:
-            self._rsp_queue.put_nowait((topic, msg))
+            print("ERROR: Unhandled RPC!")
+
+    def _mqtt_sub_cb(self, callback_handler):
+        def mqtt_sub_cb(topic, msg):
+            topic = topic.decode()
+            self.last_received_rpc_id = topic.split("/")[-1]
+            msg = json.loads(msg)
+            print((topic, msg))
+
+            if "method" in msg:
+                callback_handler(msg, self.last_received_rpc_id)
+            else:
+                self._rsp_queue.put_nowait((topic, msg))
+
+        return mqtt_sub_cb
 
     async def _sht31_task(self):
         while True:
@@ -122,7 +128,8 @@ class App:
                         now = time.time()
 
                 except Exception as e:
-                    print(e)
+                    import sys
+                    sys.print_exception(e)
                     break
                 await uasyncio.sleep_ms(100)
 
@@ -157,19 +164,21 @@ class App:
     async def _mqtt_task(self):
         while True:
             try:
-                self.mqtt_client = self._create_mqtt_client()
+                mqtt_client = self._create_mqtt_client()
+                self.mqtt_client = mqtt_client
 
                 while True:
-                    now = time.ticks_ms()
                     self.mqtt_client.check_msg()
 
-                    if self._sht31_telem.ready:
+                    if self._sht31_telem.ready():
                         self.mqtt_client.publish("v1/devices/me/telemetry",
                                                  json.dumps(self._sht31_telem.take()))
 
                     await uasyncio.sleep_ms(50)
             except Exception as e:
-                print(e)
+                import sys
+                sys.print_exception(e)
+                del self.mqtt_client
                 pass
 
     def get_keyboard(self):
@@ -217,7 +226,8 @@ class App:
                     current_lines[row] = line
 
             except Exception as e:
-                # print(e)
+                # import sys
+                # sys.print_exception(e)
                 raise e
             diff = time.ticks_diff(time.ticks_ms(), start)
             if diff > 35 and n_warns >= n_warns_suppress:
@@ -244,6 +254,7 @@ class App:
         # self.button.double_func(self.display_off)
         # self.button.long_func(self.display_on)
 
+        # noinspection DuplicatedCode
         self._init_flag = True
         print("Beginning App.main()")
 
@@ -255,7 +266,7 @@ class App:
             new = time.ticks_ms()
             diff = time.ticks_diff(new, old)
             if diff > (sleep_time + threshold):
-                print(f"Ran over! {diff}")
+                print(f"Ran over! \033[0;31m{diff}\033[0m ms (expected {threshold}")
 
     def go(self):
         # give time for print buffer to flush because apps run in a thread

@@ -6,7 +6,7 @@ class SHT31:
         self.addr = addr
         self.i2c = i2c
 
-    def read(self, v=False, f=False):
+    def read(self, *, v=False, f=False):
         """
         Nonblocking read
         :return: temperature_c, humidity_perc

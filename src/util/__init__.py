@@ -13,7 +13,6 @@ class Once:
         self._obj = obj
         self._ready = True
 
-    @property
     def ready(self):
         return self._ready
 

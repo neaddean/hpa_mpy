@@ -2,23 +2,17 @@ import binascii
 import json
 import time
 
-import micropython
 import uasyncio
 from esp32 import NVS
-from machine import I2C, Pin, unique_id, ADC, WDT
-from uarray import array
+from machine import unique_id, WDT
 from ucollections import deque
 from umqtt.simple import MQTTClient
 
 import util
-from display import Display
 from led import run_neopixel_hsl
 from primitives import RingbufQueue
-from sht31 import SHT31
 from util import atimeit
 from util.nvs import nvs_get_str
-from util.statistics import mean
-from util.timeit import timeit
 
 
 class App:
@@ -92,14 +86,7 @@ class App:
         print((topic, msg))
 
         if "method" in msg:
-            if msg["method"] == "setHeater":
-                self.sht31.heater(msg["params"])
-            elif msg["method"] == "getHeater":
-                heater_status = bool(self.sht31.get_status()["heater"])
-                self.mqtt_client.publish(f"v1/devices/me/rpc/response/{self.last_received_rpc_id}",
-                                         json.dumps(heater_status))
-            else:
-                print("ERROR: Unhandled RPC!")
+            print("ERROR: Unhandled RPC!")
         else:
             self._rsp_queue.put_nowait((topic, msg))
 
@@ -108,6 +95,7 @@ class App:
             try:
                 self.mqtt_client.check_msg()
             except Exception as e:
+                import syssys.print_exception
                 print(e)
                 pass
             await uasyncio.sleep_ms(50)
@@ -127,42 +115,46 @@ class App:
                     now = time.time()
 
             except Exception as e:
-                print(e)
+                import sys
+                sys.print_exception(e)
                 # raise e
                 pass
             await uasyncio.sleep_ms(100)
 
-    async def wait_for_mqtt_response(self, sleep=0):
-        await uasyncio.sleep(sleep)
-        async for t, rsp in self._rsp_queue:
-            return rsp, t.split("/")[-1]
 
-    async def _main(self):
-        # uasyncio.create_task(self._wdt_task())
+async def wait_for_mqtt_response(self, sleep=0):
+    await uasyncio.sleep(sleep)
+    async for t, rsp in self._rsp_queue:
+        return rsp, t.split("/")[-1]
 
-        uasyncio.create_task(run_neopixel_hsl(6, 0.5, 0.25))
-        # uasyncio.create_task(self._sht31_task())
-        uasyncio.create_task(self._mqtt_task())
 
-        self._init_flag = True
-        print("Beginning App.main()")
+async def _main(self):
+    # uasyncio.create_task(self._wdt_task())
 
-        while True:
-            sleep_time = 10_000
-            threshold = 150
-            old = time.ticks_ms()
-            await uasyncio.sleep_ms(sleep_time)
-            new = time.ticks_ms()
-            diff = time.ticks_diff(new, old)
-            if diff > (sleep_time + threshold):
-                print(f"Ran over! {diff}")
+    uasyncio.create_task(run_neopixel_hsl(6, 0.5, 0.25))
+    # uasyncio.create_task(self._sht31_task())
+    uasyncio.create_task(self._mqtt_task())
 
-    def go(self):
-        # give time for print buffer to flush because apps run in a thread
-        # time.sleep_ms(100)
-        # _thread.start_new_thread(uasyncio.run, (self._main(),))
+    self._init_flag = True
+    print("Beginning App.main()")
 
-        loop = uasyncio.get_event_loop()
-        # loop.set_exception_handler(_handle_exception)
+    while True:
+        sleep_time = 10_000
+        threshold = 150
+        old = time.ticks_ms()
+        await uasyncio.sleep_ms(sleep_time)
+        new = time.ticks_ms()
+        diff = time.ticks_diff(new, old)
+        if diff > (sleep_time + threshold):
+            print(f"Ran over! \033[0;31m{diff}\033[0m ms (expected {threshold}")
 
-        uasyncio.run(self._main())
+
+def go(self):
+    # give time for print buffer to flush because apps run in a thread
+    # time.sleep_ms(100)
+    # _thread.start_new_thread(uasyncio.run, (self._main(),))
+
+    loop = uasyncio.get_event_loop()
+    # loop.set_exception_handler(_handle_exception)
+
+    uasyncio.run(self._main())
