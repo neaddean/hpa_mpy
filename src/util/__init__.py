@@ -71,3 +71,14 @@ class atimeit:
         diff = time.ticks_diff(new, self.now)
         self.now = self._get_time()
         return diff
+
+
+def handle_exception(_loop, context):
+    # https://github.com/micropython/micropython/pull/5796
+    # context["message"] will always be there; but context["exception"] may not
+    print(context)
+    print(context["message"])
+    print(context["exception"])
+    msg = context.get("exception", context["message"])
+    print("Caught: {}{}".format(type(context["exception"]), msg))
+    print("done")

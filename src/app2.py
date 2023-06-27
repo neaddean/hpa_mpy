@@ -166,16 +166,3 @@ class App:
         # loop.set_exception_handler(_handle_exception)
 
         uasyncio.run(self._main())
-
-
-def _handle_exception(_loop, context):
-    # https://github.com/micropython/micropython/pull/5796
-    # context["message"] will always be there; but context["exception"] may not
-    print(context)
-    print(context["message"])
-    print(context["exception"])
-    msg = context.get("exception", context["message"])
-    print("Caught: {}{}".format(type(context["exception"]), msg))
-    print("done")
-
-# _thread.start_new_thread(_App().go, ())
