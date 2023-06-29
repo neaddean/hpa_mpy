@@ -114,24 +114,23 @@ class App:
         return mqtt_sub_cb
 
     async def _sht31_task(self):
+        now = time.ticks_ms()
         while True:
-            now = time.ticks_ms()
-            async for _delta in atimeit():
-                try:
-                    temperature, humidity = self.sht31.read(v=util.verbose)
+            temperature, humidity = self.sht31.read(v=util.verbose)
 
-                    self._text(f"temp: %.1f C" % temperature, 0)
-                    self._text(f"hum : %.1f %%" % humidity, 2)
+            self._text(f"temp: %.1f C" % temperature, 0)
+            self._text(f"hum : %.1f %%" % humidity, 2)
 
-                    if time.ticks_diff(time.ticks_ms(), now) > 20_000:
-                        self._sht31_telem = Once({"temperature": temperature, "humidity": humidity})
-                        now = time.time()
+            diff = time.ticks_diff(time.ticks_ms(), now)
+            if diff > 20_000:
+                now = time.ticks_ms()
+                if self._sht31_telem.ready():
+                    print(f"telem not taken, overwriting! {diff}")
 
-                except Exception as e:
-                    import sys
-                    sys.print_exception(e)
-                    break
-                await uasyncio.sleep_ms(100)
+                # TODO: timestamp
+                self._sht31_telem = Once({"temperature": temperature, "humidity": humidity})
+
+            await uasyncio.sleep_ms(100)
 
     @micropython.native
     async def _sound_task(self):
@@ -150,6 +149,7 @@ class App:
                 #     print(vals)
 
                 if time.ticks_diff(time.ticks_ms(), old_time) > 100:
+                    # noinspection PyTypeChecker
                     sound = max(vals)
                     u_sound = mean(vals)
                     self._text(f"mic : %5.0f mV" % sound, 4)
@@ -162,24 +162,30 @@ class App:
             await uasyncio.sleep_ms(250 // window_len)
 
     async def _mqtt_task(self):
+        num_attempts = 0
+
+        mqtt_client = self._create_mqtt_client()
+        self.mqtt_client = mqtt_client
+        print("new mqtt client made.")
+
         while True:
             try:
-                mqtt_client = self._create_mqtt_client()
-                self.mqtt_client = mqtt_client
+                num_attempts += 1
+                # print(f"making new mqtt client attempt {num_attempts} (run time: {time.time()} s)...")
 
                 while True:
-                    self.mqtt_client.check_msg()
+                    mqtt_client.check_msg()
 
                     if self._sht31_telem.ready():
-                        self.mqtt_client.publish("v1/devices/me/telemetry",
-                                                 json.dumps(self._sht31_telem.take()))
+                        mqtt_client.publish("v1/devices/me/telemetry",
+                                            json.dumps(self._sht31_telem.take()))
 
                     await uasyncio.sleep_ms(50)
-            except Exception as e:
-                import sys
-                sys.print_exception(e)
-                del self.mqtt_client
-                pass
+            except OSError as e:
+                # print(f"OSError in mqtt task!! Wifi: {nic.isconnected()}, {nic.status()}")
+                # sys.print_exception(e)
+                # print()
+                await uasyncio.sleep(3)
 
     def get_keyboard(self):
         return self.keyboard_adc.read_u16()
@@ -266,7 +272,7 @@ class App:
             new = time.ticks_ms()
             diff = time.ticks_diff(new, old)
             if diff > (sleep_time + threshold):
-                print(f"Ran over! \033[0;31m{diff}\033[0m ms (expected {threshold}")
+                print(f"Ran over! \033[0;31m{diff:,}\033[0m ms (expected {sleep_time})")
 
     def go(self):
         # give time for print buffer to flush because apps run in a thread

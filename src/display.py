@@ -2,7 +2,7 @@
 import time
 
 import micropython
-import romanp as font_v
+# import romanp as font_v
 import st7789
 import vga2_8x16 as font
 from machine import Pin, PWM, SPI

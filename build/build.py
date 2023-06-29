@@ -170,11 +170,10 @@ elif args.build_all:
     except OSError:
         pass
 
-    # moved into build
-    # flash_packages = f"mpremote connect {COM_PORT} mip install umqtt.simple neopixel"
-    # subprocess.run(flash_packages, shell=True)
-
-    run(f"run {os.path.join(proj_dir, '../ext/nvs_config.py')}")
+    # run(f"reset")
+    # print("Waiting 3 seconds...")
+    # time.sleep(3)
+    run(f"soft-reset + run {os.path.join(proj_dir, '../ext/nvs_config.py')}")
     run(mkdirs_and_cp_cmd())
     update_files_hash()
     run('exec --no-follow "import time, machine; time.sleep_ms(100); machine.reset()" + repl')

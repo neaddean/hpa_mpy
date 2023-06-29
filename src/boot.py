@@ -4,7 +4,7 @@ import machine
 import micropython; micropython.alloc_emergency_exception_buf(256)
 
 
-def _do_connect():
+def do_connect():
     import network
     from esp32 import NVS
     from util.nvs import nvs_get_str
@@ -27,4 +27,4 @@ def _do_connect():
 machine.Pin(12, machine.Pin.OUT).off()
 # machine.freq(240_000_000)
 
-_do_connect()
+do_connect()
